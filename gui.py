@@ -6,186 +6,240 @@ import sys
 import os
 import json
 
-# Добавляем путь к модулям
 sys.path.append(os.path.dirname(__file__))
 
 from config import GITHUB_REPO, ARCHIVE_NAME
 from github_api import get_latest_release
-from local_version import get_local_version, update_version, save_version
+from local_version import get_local_version, update_version
 from downloader import update_zapret
 
 SETTINGS_FILE = "settings.json"
+ICON_FILE = "icon.ico"
+
+# 🎨 МИНИМАЛИСТИЧНАЯ ЦВЕТОВАЯ СХЕМА
+COLORS = {
+    "bg": "#1a1a1a",           # Тёмный фон
+    "fg": "#ffffff",           # Белый текст
+    "accent": "#6c5ce7",       # Фиолетовый акцент
+    "success": "#00b894",      # Зелёный
+    "error": "#d63031",        # Красный
+    "warning": "#fdcb6e",      # Жёлтый
+    "card": "#2d2d2d",         # Цвет карточек
+    "entry": "#3d3d3d",        # Цвет полей ввода
+    "log": "#1e1e1e",          # Цвет лога
+}
 
 def load_settings():
-    """Загружает сохранённые настройки."""
     if os.path.exists(SETTINGS_FILE):
         with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     return {"zapret_path": ""}
 
 def save_settings(settings):
-    """Сохраняет настройки в файл."""
     with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
         json.dump(settings, f, indent=4)
+
+class ModernButton(tk.Button):
+    """Стильная кнопка с эффектом наведения."""
+    def __init__(self, master, **kwargs):
+        super().__init__(master, **kwargs)
+        self.config(
+            relief=tk.FLAT,
+            borderwidth=0,
+            font=("Segoe UI", 11, "bold"),
+            padx=20,
+            pady=10,
+            cursor="hand2"
+        )
 
 class ZapretUpdaterGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Zapret Auto Updater")
-        self.root.geometry("650x550")
-        self.root.resizable(True, True)
+        self.root.title("Zapret Updater")
+        self.root.geometry("600x500")
+        self.root.resizable(False, False)
+        self.root.configure(bg=COLORS["bg"])
         
-        # 🔥 УСТАНОВКА ИКОНКИ (ДВА СПОСОБА)
+        # Иконка
         try:
-            # Способ 1: внешний файл (для запуска из Python)
-            icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
+            icon_path = os.path.join(os.path.dirname(__file__), ICON_FILE)
             if os.path.exists(icon_path):
                 self.root.iconbitmap(icon_path)
-            # Способ 2: внутри EXE
             elif getattr(sys, 'frozen', False):
                 self.root.iconbitmap(sys.executable)
-        except Exception as e:
-            print(f"Не удалось установить иконку: {e}")
-
-        # Загружаем настройки
+        except:
+            pass
+        
         self.settings = load_settings()
         self.zapret_path = self.settings.get("zapret_path", "")
+        self.local_version = None
+        self.latest_release = None
         
-        # ... остальной код без изменений ...
-
-        # Загружаем настройки
-        self.settings = load_settings()
-        self.zapret_path = self.settings.get("zapret_path", "")
-        
-        # Заголовок
-        title = tk.Label(root, text="🚀 Zapret Auto Updater", 
-                        font=("Arial", 16, "bold"))
-        title.pack(pady=10)
-        
-        # === НАСТРОЙКИ ПУТИ ===
-        path_frame = tk.LabelFrame(root, text="Настройки", padx=10, pady=10)
-        path_frame.pack(fill="x", padx=10, pady=5)
-        
-        tk.Label(path_frame, text="📁 Папка с Zapret:", font=("Arial", 10)).grid(row=0, column=0, sticky="w")
-        
-        self.path_var = tk.StringVar(value=self.zapret_path)
-        self.path_entry = tk.Entry(path_frame, textvariable=self.path_var, width=50, state="readonly")
-        self.path_entry.grid(row=1, column=0, padx=(0, 5), sticky="we")
-        
-        self.browse_btn = tk.Button(path_frame, text="📂 Обзор", command=self.browse_folder)
-        self.browse_btn.grid(row=1, column=1)
-        
-        path_frame.columnconfigure(0, weight=1)
-        
-        # Инфо-панель
-        self.info_frame = tk.LabelFrame(root, text="Информация", padx=10, pady=10)
-        self.info_frame.pack(fill="x", padx=10, pady=5)
-        
-        self.version_label = tk.Label(self.info_frame, text="", font=("Arial", 10))
-        self.version_label.pack(anchor="w")
-        
-        self.path_label = tk.Label(self.info_frame, text="", font=("Arial", 10))
-        self.path_label.pack(anchor="w")
-        
-        self.latest_label = tk.Label(self.info_frame, text="", font=("Arial", 10))
-        self.latest_label.pack(anchor="w")
-        
-        # Кнопки
-        btn_frame = tk.Frame(root)
-        btn_frame.pack(pady=10)
-        
-        self.check_btn = tk.Button(btn_frame, text="🔍 Проверить обновления", 
-                                   command=self.check_updates,
-                                   font=("Arial", 12), bg="#4CAF50", fg="white",
-                                   padx=20, pady=10)
-        self.check_btn.pack(side="left", padx=5)
-        
-        self.update_btn = tk.Button(btn_frame, text="⬇️ Обновить Zapret", 
-                                    command=self.do_update,
-                                    font=("Arial", 12), bg="#2196F3", fg="white",
-                                    padx=20, pady=10, state="disabled")
-        self.update_btn.pack(side="left", padx=5)
-        
-        # Лог
-        self.log_frame = tk.LabelFrame(root, text="Лог", padx=10, pady=10)
-        self.log_frame.pack(fill="both", expand=True, padx=10, pady=5)
-        
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, height=12, 
-                                                   font=("Consolas", 9))
-        self.log_text.pack(fill="both", expand=True)
-        
-        # Прогресс-бар
-        self.progress = ttk.Progressbar(root, mode='indeterminate')
-        self.progress.pack(fill="x", padx=10, pady=5)
-        
-        # Статус-бар
-        self.status_label = tk.Label(root, text="Готов к работе", 
-                                     font=("Arial", 9), fg="gray", anchor="w")
-        self.status_label.pack(fill="x", padx=10, pady=5)
-        
-        # Обновляем информацию при старте
-        self.update_path_display()
+        self.setup_ui()
         self.refresh_local_version()
         
+    def setup_ui(self):
+        # Главный контейнер
+        main_frame = tk.Frame(self.root, bg=COLORS["bg"])
+        main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        
+        # Заголовок
+        title = tk.Label(
+            main_frame,
+            text="⚡ Zapret Updater",
+            font=("Segoe UI", 20, "bold"),
+            fg=COLORS["accent"],
+            bg=COLORS["bg"]
+        )
+        title.pack(pady=(0, 20))
+        
+        # Карточка с путём
+        path_card = tk.Frame(main_frame, bg=COLORS["card"], bd=0)
+        path_card.pack(fill="x", pady=(0, 15))
+        
+        tk.Label(
+            path_card,
+            text="📁 Путь к Zapret",
+            font=("Segoe UI", 10),
+            fg=COLORS["fg"],
+            bg=COLORS["card"]
+        ).pack(anchor="w", padx=15, pady=(15, 5))
+        
+        path_row = tk.Frame(path_card, bg=COLORS["card"])
+        path_row.pack(fill="x", padx=15, pady=(0, 15))
+        
+        self.path_var = tk.StringVar(value=self.zapret_path if self.zapret_path else "Не выбран")
+        self.path_entry = tk.Entry(
+            path_row,
+            textvariable=self.path_var,
+            font=("Segoe UI", 9),
+            bg=COLORS["entry"],
+            fg=COLORS["fg"],
+            relief=tk.FLAT,
+            state="readonly",
+            readonlybackground=COLORS["entry"]
+        )
+        self.path_entry.pack(side="left", fill="x", expand=True)
+        
+        ModernButton(
+            path_row,
+            text="Обзор",
+            command=self.browse_folder,
+            bg=COLORS["accent"],
+            fg="white"
+        ).pack(side="left", padx=(10, 0))
+        
+        # Карточка с информацией
+        info_card = tk.Frame(main_frame, bg=COLORS["card"], bd=0)
+        info_card.pack(fill="x", pady=(0, 15))
+        
+        self.version_label = tk.Label(
+            info_card,
+            text="Версия: не определена",
+            font=("Segoe UI", 11),
+            fg=COLORS["fg"],
+            bg=COLORS["card"]
+        )
+        self.version_label.pack(anchor="w", padx=15, pady=15)
+        
+        # Кнопки
+        btn_frame = tk.Frame(main_frame, bg=COLORS["bg"])
+        btn_frame.pack(fill="x", pady=(0, 15))
+        
+        self.check_btn = ModernButton(
+            btn_frame,
+            text="🔍 Проверить обновления",
+            command=self.check_updates,
+            bg=COLORS["accent"],
+            fg="white"
+        )
+        self.check_btn.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        
+        self.update_btn = ModernButton(
+            btn_frame,
+            text="⬇️ Обновить",
+            command=self.do_update,
+            bg=COLORS["card"],
+            fg=COLORS["fg"],
+            state="disabled"
+        )
+        self.update_btn.pack(side="left", fill="x", expand=True, padx=(5, 0))
+        
+        # Лог
+        log_frame = tk.Frame(main_frame, bg=COLORS["log"], bd=0)
+        log_frame.pack(fill="both", expand=True)
+        
+        self.log_text = scrolledtext.ScrolledText(
+            log_frame,
+            height=8,
+            font=("Consolas", 9),
+            bg=COLORS["log"],
+            fg="#a0a0a0",
+            relief=tk.FLAT,
+            borderwidth=0
+        )
+        self.log_text.pack(fill="both", expand=True, padx=1, pady=1)
+        
+        # Прогресс-бар (скрытый)
+        self.progress = ttk.Progressbar(main_frame, mode='indeterminate')
+        
+        # Статус
+        self.status_label = tk.Label(
+            main_frame,
+            text="● Готов",
+            font=("Segoe UI", 9),
+            fg=COLORS["success"],
+            bg=COLORS["bg"],
+            anchor="w"
+        )
+        self.status_label.pack(fill="x", pady=(10, 0))
+        
     def browse_folder(self):
-        """Открывает диалог выбора папки."""
         folder = filedialog.askdirectory(title="Выберите папку с Zapret")
         if folder:
             self.zapret_path = folder
             self.path_var.set(folder)
-            
-            # Сохраняем настройки
             self.settings["zapret_path"] = folder
             save_settings(self.settings)
             
-            # Сбрасываем сохранённую версию
             version_file = "zapret_version.txt"
             if os.path.exists(version_file):
                 os.remove(version_file)
-                self.log("🔄 Сброшена сохранённая версия")
             
-            self.update_path_display()
             self.refresh_local_version()
-            self.log(f"📁 Выбрана папка: {folder}")
-            
-    def update_path_display(self):
-        """Обновляет отображение пути."""
-        if self.zapret_path:
-            self.path_label.config(text=f"📁 Путь: {self.zapret_path}")
-        else:
-            self.path_label.config(text="⚠️ Путь не выбран! Нажмите 'Обзор'", fg="orange")
+            self.log(f"📁 {folder}")
             
     def refresh_local_version(self):
-        """Обновляет информацию о локальной версии."""
         if self.zapret_path:
-            self.local_version = get_local_version(self.zapret_path, gui_mode=True)  # ← добавил gui_mode=True
+            self.local_version = get_local_version(self.zapret_path, gui_mode=True)
             if self.local_version:
-                self.version_label.config(text=f"📂 Установленная версия: {self.local_version}")
+                self.version_label.config(text=f"📦 {self.local_version}")
             else:
-                self.version_label.config(text="⚠️ Версия не определена", fg="orange")
+                self.version_label.config(text="⚠️ Версия не найдена")
         else:
             self.local_version = None
-            self.version_label.config(text="⚠️ Выберите папку с Zapret", fg="orange")
+            self.version_label.config(text="📂 Выберите папку")
             
     def log(self, message):
         self.log_text.insert(tk.END, message + "\n")
         self.log_text.see(tk.END)
         self.root.update()
         
-    def set_status(self, text, color="gray"):
-        self.status_label.config(text=text, fg=color)
+    def set_status(self, text, color=None):
+        if color is None:
+            color = COLORS["success"]
+        self.status_label.config(text=f"● {text}", fg=color)
         self.root.update()
         
     def check_updates(self):
         if not self.zapret_path:
-            messagebox.showwarning("Внимание", "Сначала выберите папку с Zapret!")
+            messagebox.showwarning("Внимание", "Выберите папку с Zapret")
             return
             
-        self.check_btn.config(state="disabled", text="⏳ Проверяю...")
+        self.check_btn.config(state="disabled", text="⏳ Проверка...")
+        self.progress.pack(fill="x", pady=(0, 10))
         self.progress.start()
-        self.log("=" * 50)
-        self.log("🔍 Проверка обновлений...")
-        self.set_status("Проверка обновлений...", "blue")
+        self.set_status("Проверка обновлений...", COLORS["warning"])
         
         thread = threading.Thread(target=self._check_updates_thread)
         thread.daemon = True
@@ -197,53 +251,47 @@ class ZapretUpdaterGUI:
             
             if self.latest_release:
                 latest_ver = self.latest_release['version']
-                self.latest_label.config(text=f"🌐 Последняя версия: {latest_ver}")
-                self.log(f"✅ Последняя версия на GitHub: {latest_ver}")
+                self.log(f"✓ Последняя версия: {latest_ver}")
                 
                 if self.local_version and latest_ver != self.local_version:
-                    self.log(f"🔥 ДОСТУПНО ОБНОВЛЕНИЕ! ({self.local_version} → {latest_ver})")
-                    self.version_label.config(
-                        text=f"📂 Установленная версия: {self.local_version} → {latest_ver}",
-                        fg="green"
-                    )
-                    self.root.after(0, lambda: self.update_btn.config(state="normal"))
-                    self.set_status("Доступно обновление!", "green")
+                    self.log(f"🔥 Доступно обновление! ({self.local_version} → {latest_ver})")
+                    self.version_label.config(text=f"📦 {self.local_version} → {latest_ver}", fg=COLORS["warning"])
+                    self.root.after(0, lambda: self.update_btn.config(
+                        state="normal", bg=COLORS["success"], fg="white"
+                    ))
+                    self.root.after(0, lambda: self.set_status("Доступно обновление", COLORS["warning"]))
                 else:
-                    self.log("✅ У вас актуальная версия.")
-                    self.set_status("Актуальная версия", "green")
+                    self.log("✓ Актуальная версия")
+                    self.root.after(0, lambda: self.set_status("Актуальная версия", COLORS["success"]))
             else:
-                self.log("❌ Не удалось получить информацию о релизе.")
-                self.set_status("Ошибка проверки", "red")
+                self.log("✗ Ошибка получения релиза")
+                self.root.after(0, lambda: self.set_status("Ошибка", COLORS["error"]))
                 
         except Exception as e:
-            self.log(f"❌ Ошибка: {e}")
-            self.set_status("Ошибка", "red")
+            self.log(f"✗ Ошибка: {e}")
+            self.root.after(0, lambda: self.set_status("Ошибка", COLORS["error"]))
         finally:
             self.root.after(0, lambda: self.check_btn.config(state="normal", text="🔍 Проверить обновления"))
             self.root.after(0, lambda: self.progress.stop())
+            self.root.after(0, lambda: self.progress.pack_forget())
             
     def do_update(self):
-        if not self.zapret_path:
-            messagebox.showwarning("Внимание", "Сначала выберите папку с Zapret!")
-            return
-            
         if not self.latest_release:
-            messagebox.showerror("Ошибка", "Сначала проверьте обновления!")
             return
             
         answer = messagebox.askyesno(
             "Подтверждение",
-            f"Будет удалена папка:\n{self.zapret_path}\n\nПродолжить?"
+            f"Удалить папку:\n{self.zapret_path}\n\nи установить новую версию?"
         )
         
         if not answer:
             return
             
-        self.update_btn.config(state="disabled", text="⏳ Обновляю...")
+        self.update_btn.config(state="disabled", text="⏳ Обновление...")
         self.check_btn.config(state="disabled")
+        self.progress.pack(fill="x", pady=(0, 10))
         self.progress.start()
-        self.log("📥 Начинаю обновление...")
-        self.set_status("Обновление...", "blue")
+        self.set_status("Обновление...", COLORS["warning"])
         
         thread = threading.Thread(target=self._do_update_thread)
         thread.daemon = True
@@ -256,28 +304,29 @@ class ZapretUpdaterGUI:
                 download_url=self.latest_release['download_url'],
                 archive_name=ARCHIVE_NAME,
                 skip_confirm=True,
-                log_callback=self.log  # ← просто передаём self.log
+                log_callback=self.log
             )
             
             if success:
                 update_version(self.latest_release['version'])
                 self.refresh_local_version()
-                self.root.after(0, lambda: self.latest_label.config(text=""))
-                self.root.after(0, lambda: self.version_label.config(fg="black"))
-                self.log(f"🎉 Zapret успешно обновлён до версии {self.latest_release['version']}!")
-                self.set_status("Обновление завершено!", "green")
-                self.root.after(0, lambda: messagebox.showinfo("Успех", f"Zapret обновлён до версии {self.latest_release['version']}!"))
+                self.log(f"🎉 Успешно обновлено до {self.latest_release['version']}")
+                self.root.after(0, lambda: self.set_status("Обновлено!", COLORS["success"]))
+                self.root.after(0, lambda: messagebox.showinfo("Успех", "Zapret обновлён!"))
             else:
-                self.log("❌ Обновление не удалось.")
-                self.set_status("Ошибка обновления", "red")
+                self.log("✗ Ошибка обновления")
+                self.root.after(0, lambda: self.set_status("Ошибка", COLORS["error"]))
                 
         except Exception as e:
-            self.log(f"❌ Ошибка: {e}")
-            self.set_status("Ошибка", "red")
+            self.log(f"✗ Ошибка: {e}")
+            self.root.after(0, lambda: self.set_status("Ошибка", COLORS["error"]))
         finally:
-            self.root.after(0, lambda: self.update_btn.config(state="disabled", text="⬇️ Обновить Zapret"))
+            self.root.after(0, lambda: self.update_btn.config(
+                state="disabled", text="⬇️ Обновить", bg=COLORS["card"], fg=COLORS["fg"]
+            ))
             self.root.after(0, lambda: self.check_btn.config(state="normal", text="🔍 Проверить обновления"))
             self.root.after(0, lambda: self.progress.stop())
+            self.root.after(0, lambda: self.progress.pack_forget())
 
 def main():
     root = tk.Tk()
