@@ -35,9 +35,23 @@ class ZapretUpdaterGUI:
         self.root.geometry("650x550")
         self.root.resizable(True, True)
         
-        icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
-        if os.path.exists(icon_path):
-            self.root.iconbitmap(icon_path)
+        # 🔥 УСТАНОВКА ИКОНКИ (ДВА СПОСОБА)
+        try:
+            # Способ 1: внешний файл (для запуска из Python)
+            icon_path = os.path.join(os.path.dirname(__file__), "icon.ico")
+            if os.path.exists(icon_path):
+                self.root.iconbitmap(icon_path)
+            # Способ 2: внутри EXE
+            elif getattr(sys, 'frozen', False):
+                self.root.iconbitmap(sys.executable)
+        except Exception as e:
+            print(f"Не удалось установить иконку: {e}")
+
+        # Загружаем настройки
+        self.settings = load_settings()
+        self.zapret_path = self.settings.get("zapret_path", "")
+        
+        # ... остальной код без изменений ...
 
         # Загружаем настройки
         self.settings = load_settings()
