@@ -1,11 +1,16 @@
-from config import GITHUB_REPO, ZAPRET_PATH, DOWNLOAD_FOLDER, ARCHIVE_NAME
+# main.py
+import sys
+import os
+sys.path.append(os.path.dirname(__file__))
+
+from config import GITHUB_REPO, ZAPRET_PATH, ARCHIVE_NAME
 from github_api import get_latest_release
 from local_version import get_local_version, update_version
 from downloader import update_zapret
 
 def main():
     print("=" * 50)
-    print("🚀 Zapret Auto Updater")
+    print("🚀 Zapret Auto Updater (Консольная версия)")
     print("=" * 50)
     
     # Определяем локальную версию
