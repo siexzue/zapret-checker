@@ -23,7 +23,7 @@ jobs:
       
       - name: 🔨 Собрать EXE
         run: |
-          pyinstaller --onefile --windowed --icon=icon.ico --name ZapretUpdater gui.py
+          python -m PyInstaller --onefile --windowed --icon=icon.ico --name ZapretUpdater gui.py
       
       - name: 📤 Загрузить EXE
         uses: actions/upload-artifact@v4
