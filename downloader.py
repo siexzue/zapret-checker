@@ -21,7 +21,6 @@ def download_file(url, save_path, log_callback=None):
         for chunk in response.iter_content(chunk_size=8192):
             f.write(chunk)
             downloaded += len(chunk)
-            # Прогресс показываем только в консоли (в GUI слишком много сообщений)
             if total_size > 0 and not log_callback:
                 percent = (downloaded / total_size) * 100
                 print(f"\rПрогресс: {percent:.1f}%", end='')
@@ -32,32 +31,46 @@ def download_file(url, save_path, log_callback=None):
     else:
         print(msg)
 
-def extract_zip(zip_path, extract_to, log_callback=None):
-    """Распаковывает ZIP архив."""
-    if log_callback:
-        log_callback(f"📦 Распаковываю в: {extract_to}")
-    else:
-        print(f"📦 Распаковываю в: {extract_to}")
+def extract_zip(zip_path, extract_to):
+    """Распаковывает ZIP архив, извлекая содержимое без вложенной папки."""
+    print(f"📦 Распаковываю в: {extract_to}")
     
     with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_to)
+        all_files = zip_ref.namelist()
+        
+        if all_files:
+            root_folder = all_files[0].split('/')[0]
+            
+            for file in all_files:
+                # Пропускаем папки .github (они не нужны для работы Zapret)
+                if '.github' in file:
+                    continue
+                    
+                if file.startswith(root_folder + '/'):
+                    target_path = file[len(root_folder) + 1:]
+                else:
+                    target_path = file
+                
+                if target_path:
+                    full_path = os.path.join(extract_to, target_path)
+                    
+                    # Создаём папки
+                    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                    
+                    # Извлекаем ТОЛЬКО файлы (не папки)
+                    if not file.endswith('/'):
+                        with zip_ref.open(file) as source, open(full_path, 'wb') as target:
+                            target.write(source.read())
     
-    if log_callback:
-        log_callback("✅ Распаковка завершена!")
-    else:
-        print("✅ Распаковка завершена!")
+    print("✅ Распаковка завершена!")
 
 def update_zapret(zapret_path, download_url, archive_name, skip_confirm=False, log_callback=None):
-    """
-    Обновляет Zapret.
-    Если skip_confirm=True — пропускает input() (для GUI).
-    """
+    """Обновляет Zapret."""
     os.makedirs("downloads", exist_ok=True)
     zip_path = os.path.join("downloads", archive_name)
     
     download_file(download_url, zip_path, log_callback)
     
-    # Подтверждение (только если не пропускаем)
     if not skip_confirm:
         print(f"\n⚠️ ВНИМАНИЕ! Будет удалена папка: {zapret_path}")
         confirm = input("Продолжить? (y/n): ").strip().lower()
@@ -68,7 +81,6 @@ def update_zapret(zapret_path, download_url, archive_name, skip_confirm=False, l
                 print("❌ Отмена.")
             return False
     
-    # Удаляем старую папку
     if os.path.exists(zapret_path):
         msg = f"🗑️ Удаляю старую версию: {zapret_path}"
         if log_callback:
@@ -106,9 +118,8 @@ def update_zapret(zapret_path, download_url, archive_name, skip_confirm=False, l
                 print(error_msg)
             return False
     
-    # Распаковываем новую версию
     try:
-        extract_zip(zip_path, zapret_path, log_callback)
+        extract_zip(zip_path, zapret_path)
     except Exception as e:
         error_msg = f"❌ Ошибка при распаковке: {e}"
         if log_callback:
