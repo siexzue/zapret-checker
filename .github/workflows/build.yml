@@ -1,0 +1,32 @@
+name: Build EXE
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+      - name: 📥 Скачать код
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Установить Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      
+      - name: 📦 Установить зависимости
+        run: pip install -r requirements.txt
+      
+      - name: 🔨 Собрать EXE
+        run: |
+          pyinstaller --onefile --windowed --icon=icon.ico --name ZapretUpdater gui.py
+      
+      - name: 📤 Загрузить EXE
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZapretUpdater
+          path: dist/ZapretUpdater.exe
