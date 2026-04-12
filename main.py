@@ -8,14 +8,18 @@ def main():
     print(f"Текущая версия: {CURRENT_VERSION}")
     
     latest = get_latest_release(GITHUB_REPO)
+    
     if latest:
-        print(f"Последняя версия: {latest['version']}")
+        print(f"Последняя версия на GitHub: {latest['version']}")
+        
         if latest['version'] != CURRENT_VERSION:
-            print("Доступно обновление!")
+            print("🔥 ДОСТУПНО ОБНОВЛЕНИЕ!")
+            print(f"Скачать можно тут: {latest['html_url']}")
         else:
-            print("У вас актуальная версия.")
+            print("✅ У вас актуальная версия.")
     else:
-        print("Не удалось получить информацию о релизе.")
+        print("❌ Не удалось проверить обновления.")
+        print("Программа продолжит работу с текущей версией.")
 
 if __name__ == "__main__":
     main()
