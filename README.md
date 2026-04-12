@@ -29,11 +29,6 @@
 
 ## 🔧 Установка и запуск
 
-### Запуск из исходников
-```bash
-pip install -r requirements.txt
-python gui.py
-
 ## ⬇️ Скачать
 
 [📥 Скачать ZapretUpdater.exe](https://github.com/siexzue/zapret-checker/releases/latest)
