@@ -1,7 +1,15 @@
 # config.py
-GITHUB_REPO = "Flowseal/zapret-discord-youtube"
 
-# Путь к папке с Zapret (ИСПРАВЬ НА СВОЙ!)
+# Версия приложения
+APP_VERSION = "1.0.2"
+
+# Репозиторий Zapret
+ZAPRET_REPO = "Flowseal/zapret-discord-youtube"
+
+# Ваш репозиторий с программой
+APP_REPO = "siexzue/zapret-checker"
+
+# Путь к папке с Zapret
 ZAPRET_PATH = r"C:\Users\sasha\OneDrive\Рабочий стол\APAT_ZAPRET"
 
 # Папка для скачивания обновлений

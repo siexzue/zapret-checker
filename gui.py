@@ -8,10 +8,11 @@ import json
 
 sys.path.append(os.path.dirname(__file__))
 
-from config import GITHUB_REPO, ARCHIVE_NAME
+from config import ZAPRET_REPO, ARCHIVE_NAME, APP_REPO
 from github_api import get_latest_release
 from local_version import get_local_version, update_version
 from downloader import update_zapret
+from app_updater import check_for_app_updates, download_update, install_update
 
 SETTINGS_FILE = "settings.json"
 ICON_FILE = "icon.ico"
@@ -77,6 +78,9 @@ class ZapretUpdaterGUI:
         
         self.setup_ui()
         self.refresh_local_version()
+
+        # Проверяем обновления приложения при запуске
+        self.root.after(1000, self.check_app_updates)
         
     def setup_ui(self):
         # Главный контейнер
@@ -247,7 +251,7 @@ class ZapretUpdaterGUI:
         
     def _check_updates_thread(self):
         try:
-            self.latest_release = get_latest_release(GITHUB_REPO)
+            self.latest_release = get_latest_release(ZAPRET_REPO)
             
             if self.latest_release:
                 latest_ver = self.latest_release['version']
@@ -327,6 +331,46 @@ class ZapretUpdaterGUI:
             self.root.after(0, lambda: self.check_btn.config(state="normal", text="🔍 Проверить обновления"))
             self.root.after(0, lambda: self.progress.stop())
             self.root.after(0, lambda: self.progress.pack_forget())
+
+    def check_app_updates(self):
+        """Проверяет обновления самого приложения."""
+        update_info = check_for_app_updates(APP_REPO)
+
+        if update_info:
+            self.log(f"🔔 Доступна новая версия приложения: {update_info['current']} → {update_info['latest']}")
+
+            answer = messagebox.askyesno(
+                "Доступно обновление",
+                f"Вышла новая версия: {update_info['latest']}\n"
+                f"Текущая версия: {update_info['current']}\n\n"
+                f"Хотите обновить?"
+            )
+
+            if answer:
+                self._do_app_update(update_info)
+
+    def _do_app_update(self, update_info):
+        """Скачивает и устанавливает обновление приложения."""
+        self.log("📥 Начинаю загрузку обновления приложения...")
+        self.set_status("Обновление приложения...", COLORS["warning"])
+
+        def progress_callback(msg):
+            self.log(msg)
+            self.root.update()
+
+        new_exe = download_update(update_info['download_url'], progress_callback)
+
+        if new_exe:
+            self.log("✅ Обновление скачано, устанавливаю...")
+            success = install_update(new_exe, update_info['html_url'])
+            if success == True:
+                self.log("🎉 Приложение будет перезапущено с новой версией!")
+            else:
+                self.log("❌ Ошибка при установке обновления")
+                self.set_status("Ошибка обновления", COLORS["error"])
+        else:
+            self.log("❌ Не удалось скачать обновление")
+            self.set_status("Ошибка обновления", COLORS["error"])
 
 def main():
     root = tk.Tk()
