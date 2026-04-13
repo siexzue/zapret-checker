@@ -3,7 +3,8 @@
 # Версия приложения
 APP_VERSION = "1.0.2"
 
-# Репозиторий Zapret
+# Репозиторий Zapret (GitHub API)
+GITHUB_REPO = "Flowseal/zapret-discord-youtube"
 ZAPRET_REPO = "Flowseal/zapret-discord-youtube"
 
 # Ваш репозиторий с программой
