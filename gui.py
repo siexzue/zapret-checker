@@ -4,6 +4,7 @@ from tkinter import ttk, messagebox, scrolledtext, filedialog
 import threading
 import sys
 import os
+from PIL import Image, ImageTk  # Added for background image support
 
 sys.path.append(os.path.dirname(__file__))
 
@@ -15,14 +16,18 @@ from app_updater import check_for_app_updates, download_update, install_update
 from version_utils import is_update_available, normalize_version
 ICON_FILE = "icon.ico"
 
+# Аниме-шрифт
+ANIME_FONT = ("Comic Sans MS", 11, "bold")
+ANIME_FONT_SMALL = ("Comic Sans MS", 9)
+
 class ModernButton(tk.Button):
-    """Стильная кнопка с эффектом наведения."""
+    """Стильная кнопка в аниме-стиле."""
     def __init__(self, master, **kwargs):
         super().__init__(master, **kwargs)
         self.config(
             relief=tk.FLAT,
             borderwidth=0,
-            font=("Segoe UI", 11, "bold"),
+            font=ANIME_FONT,
             padx=20,
             pady=10,
             cursor="hand2"
@@ -31,41 +36,45 @@ class ModernButton(tk.Button):
 class ZapretUpdaterGUI:
     def __init__(self, root):
         self.root = root
-        self.root.title("Zapret Updater v1.0")
+        self.root.title("⚡ Zapret Updater ✨")
         self.root.geometry("600x500")
         self.root.resizable(False, False)
 
-        # Определяем темы
+        # Путь к папке с фоновыми картинками
+        self.bg_dir = os.path.join(os.path.dirname(__file__), "bg")
+
+        # Аниме-темы (цвета + имена фоновых картинок)
         self.themes = {
-            "dark": {
-                "bg": "#1a1a1a",
-                "fg": "#ffffff",
-                "accent": "#6c5ce7",
-                "success": "#00b894",
-                "error": "#d63031",
-                "warning": "#fdcb6e",
-                "card": "#2d2d2d",
-                "entry": "#3d3d3d",
-                "log": "#1e1e1e",
+            "anime_dark": {
+                "bg": "#1a1a2e",
+                "fg": "#f5e6ff",
+                "accent": "#ff6b6b",
+                "success": "#51cf66",
+                "error": "#ff6b6b",
+                "warning": "#ffd43b",
+                "card": "#2d2d44",
+                "entry": "#3d3d5c",
+                "log": "#1a1a2e",
+                "bg_image": "anime_dark_bg.jpg"   # <-- исправлено расширение
             },
-            "light": {
-                "bg": "#f0f0f0",
-                "fg": "#000000",
-                "accent": "#3b82f6",
-                "success": "#22c55e",
-                "error": "#ef4444",
-                "warning": "#f59e0b",
-                "card": "#ffffff",
-                "entry": "#e5e7eb",
-                "log": "#f9fafb",
+            "anime_light": {
+                "bg": "#fff0f5",
+                "fg": "#2d2d44",
+                "accent": "#ff6b6b",
+                "success": "#51cf66",
+                "error": "#ff6b6b",
+                "warning": "#ffd43b",
+                "card": "#ffe4ec",
+                "entry": "#fff5f7",
+                "log": "#fff0f5",
+                "bg_image": "anime_light_bg.jpg"  # <-- исправлено расширение
             }
         }
 
-        # Загружаем настройки и выбираем тему
         self.settings = load_settings()
-        self.current_theme = self.settings.get("theme", "dark")
+        self.current_theme = self.settings.get("theme", "anime_dark")
         if self.current_theme not in self.themes:
-            self.current_theme = "dark"
+            self.current_theme = "anime_dark"
         self.colors = self.themes[self.current_theme].copy()
         self.root.configure(bg=self.colors["bg"])
 
@@ -79,12 +88,32 @@ class ZapretUpdaterGUI:
         except:
             pass
 
+        # Canvas для фона
+        self.canvas = tk.Canvas(self.root, width=600, height=500, highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+
+        # Переменные для фона
+        self.bg_image = None
+        self.bg_img_id = None
+
+        # Загружаем фон для начальной темы
+        bg_filename = self.themes[self.current_theme].get("bg_image", "")
+        if bg_filename:
+            img = self.load_bg_image(bg_filename)
+            if img:
+                self.bg_image = img
+                self.bg_img_id = self.canvas.create_image(0, 0, anchor='nw', image=img)
+
+        # Основной фрейм поверх Canvas
+        self.main_frame = tk.Frame(self.canvas, bg=self.colors["bg"])
+        self.canvas.create_window(0, 0, window=self.main_frame, anchor='nw')
+
         self.zapret_path = self.settings.get("zapret_path", "")
         self.local_version = None
         self.latest_release = None
 
         self.setup_ui()
-        self.apply_theme()  # применяем цвета при старте
+        self.apply_theme()
         self.refresh_local_version()
 
         if self.zapret_path:
@@ -93,13 +122,113 @@ class ZapretUpdaterGUI:
         if getattr(sys, 'frozen', False):
             self.root.after(1000, self.check_app_updates)
 
-    def setup_ui(self):
-        # Главный контейнер
-        self.main_frame = tk.Frame(self.root, bg=self.colors["bg"])
-        self.main_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        # Подгоняем размер main_frame под Canvas
+        self.root.update()
+        self.canvas.config(scrollregion=self.canvas.bbox("all"))
 
-        # Кнопка переключения темы (внутри main_frame)
-        theme_label = "🌙 Тёмная" if self.current_theme == "dark" else "☀️ Светлая"
+    def load_bg_image(self, filename):
+        """Загружает фоновое изображение с помощью Pillow."""
+        path = os.path.join(self.bg_dir, filename)
+        try:
+            if os.path.exists(path):
+                # Открываем изображение через PIL
+                img = Image.open(path)
+                # Масштабируем под размер окна (600x500)
+                img = img.resize((600, 500), Image.Resampling.LANCZOS)
+                # Конвертируем в PhotoImage для tkinter
+                photo = ImageTk.PhotoImage(img)
+                return photo
+            else:
+                print(f"Файл не найден: {path}")
+                return None
+        except Exception as e:
+            print(f"Ошибка загрузки картинки: {e}")
+            return None
+
+    def apply_theme(self):
+        """Применяет текущую тему (цвета + фон)."""
+        colors = self.colors
+        self.root.configure(bg=colors["bg"])
+        self.canvas.configure(bg=colors["bg"])
+        self.main_frame.configure(bg=colors["bg"])
+
+        # Обновляем цвета всех виджетов
+        def update_widgets(widget):
+            if widget == self.theme_btn or widget == self.browse_btn:
+                widget.configure(bg=colors["card"], fg=colors["accent"])
+            elif isinstance(widget, ModernButton):
+                widget.configure(
+                    bg=colors["bg"] if widget["state"] == "disabled" else colors["accent"],
+                    fg=colors["fg"] if widget["state"] == "disabled" else "white"
+                )
+            elif isinstance(widget, tk.Label):
+                widget.configure(bg=colors["bg"] if widget.master == self.main_frame else colors["card"],
+                                 fg=colors["fg"])
+            elif isinstance(widget, tk.Frame):
+                widget.configure(bg=colors["bg"] if widget.master == self.main_frame else colors["card"])
+            elif isinstance(widget, tk.Entry):
+                widget.configure(bg=colors["entry"], fg=colors["fg"],
+                                 readonlybackground=colors["entry"])
+            elif isinstance(widget, scrolledtext.ScrolledText):
+                widget.configure(bg=colors["log"], fg=colors["fg"])
+            elif isinstance(widget, ttk.Progressbar):
+                pass
+            else:
+                try:
+                    widget.configure(bg=colors["bg"], fg=colors["fg"])
+                except:
+                    pass
+
+            for child in widget.winfo_children():
+                update_widgets(child)
+
+        update_widgets(self.main_frame)
+
+        # Обновляем кнопки и заголовки
+        self.theme_btn.configure(
+            text="🌙 Тёмная" if self.current_theme == "anime_dark" else "☀️ Светлая",
+            bg=colors["card"], fg=colors["accent"]
+        )
+        self.browse_btn.configure(bg=colors["accent"], fg="white")
+        self.check_btn.configure(bg=colors["accent"], fg="white")
+        if self.update_btn["state"] == "disabled":
+            self.update_btn.configure(bg=colors["card"], fg=colors["fg"])
+        else:
+            self.update_btn.configure(bg=colors["success"], fg="white")
+        self.status_label.configure(
+            fg=colors["success"] if self.status_label["text"].startswith("● Готов") else colors["fg"]
+        )
+        self.title_label.configure(fg=colors["accent"])
+        self.version_label.configure(fg=colors["fg"], bg=colors["card"])
+
+        # --- Обновление фоновой картинки ---
+        bg_filename = self.themes[self.current_theme].get("bg_image", "")
+        if bg_filename:
+            if self.bg_img_id is not None:
+                self.canvas.delete(self.bg_img_id)
+                self.bg_img_id = None
+                self.bg_image = None
+            img = self.load_bg_image(bg_filename)
+            if img:
+                self.bg_image = img
+                self.bg_img_id = self.canvas.create_image(0, 0, anchor='nw', image=img)
+        else:
+            if self.bg_img_id is not None:
+                self.canvas.delete(self.bg_img_id)
+                self.bg_img_id = None
+                self.bg_image = None
+
+    def toggle_theme(self):
+        """Переключает тему и сохраняет выбор."""
+        self.current_theme = "anime_light" if self.current_theme == "anime_dark" else "anime_dark"
+        self.colors = self.themes[self.current_theme].copy()
+        self.settings["theme"] = self.current_theme
+        save_settings(self.settings)
+        self.apply_theme()
+
+    def setup_ui(self):
+        # Все виджеты создаются внутри self.main_frame
+        theme_label = "🌙 Тёмная" if self.current_theme == "anime_dark" else "☀️ Светлая"
         self.theme_btn = ModernButton(
             self.main_frame,
             text=theme_label,
@@ -109,11 +238,10 @@ class ZapretUpdaterGUI:
         )
         self.theme_btn.pack(pady=(0, 10))
 
-        # Заголовок
         self.title_label = tk.Label(
             self.main_frame,
-            text="⚡ Zapret Updater",
-            font=("Segoe UI", 20, "bold"),
+            text="⚡ Zapret Updater ✨",
+            font=("Comic Sans MS", 20, "bold"),
             fg=self.colors["accent"],
             bg=self.colors["bg"]
         )
@@ -126,7 +254,7 @@ class ZapretUpdaterGUI:
         tk.Label(
             self.path_card,
             text="📁 Путь к Zapret",
-            font=("Segoe UI", 10),
+            font=ANIME_FONT_SMALL,
             fg=self.colors["fg"],
             bg=self.colors["card"]
         ).pack(anchor="w", padx=15, pady=(15, 5))
@@ -138,7 +266,7 @@ class ZapretUpdaterGUI:
         self.path_entry = tk.Entry(
             path_row,
             textvariable=self.path_var,
-            font=("Segoe UI", 9),
+            font=ANIME_FONT_SMALL,
             bg=self.colors["entry"],
             fg=self.colors["fg"],
             relief=tk.FLAT,
@@ -163,7 +291,7 @@ class ZapretUpdaterGUI:
         self.version_label = tk.Label(
             self.info_card,
             text="Версия: не определена",
-            font=("Segoe UI", 11),
+            font=ANIME_FONT_SMALL,
             fg=self.colors["fg"],
             bg=self.colors["card"]
         )
@@ -199,7 +327,7 @@ class ZapretUpdaterGUI:
         self.log_text = scrolledtext.ScrolledText(
             self.log_frame,
             height=8,
-            font=("Consolas", 9),
+            font=("Comic Sans MS", 8),
             bg=self.colors["log"],
             fg=self.colors["fg"],
             relief=tk.FLAT,
@@ -207,79 +335,17 @@ class ZapretUpdaterGUI:
         )
         self.log_text.pack(fill="both", expand=True, padx=1, pady=1)
 
-        # Прогресс-бар (скрытый)
         self.progress = ttk.Progressbar(self.main_frame, mode='indeterminate')
 
-        # Статус
         self.status_label = tk.Label(
             self.main_frame,
             text="● Готов",
-            font=("Segoe UI", 9),
+            font=("Comic Sans MS", 9),
             fg=self.colors["success"],
             bg=self.colors["bg"],
             anchor="w"
         )
         self.status_label.pack(fill="x", pady=(10, 0))
-
-    def apply_theme(self):
-        """Применяет текущую цветовую тему ко всем виджетам."""
-        colors = self.colors
-        self.root.configure(bg=colors["bg"])
-        self.main_frame.configure(bg=colors["bg"])
-
-        # Обновляем все дочерние виджеты рекурсивно
-        def update_widgets(widget):
-            if widget == self.theme_btn or widget == self.browse_btn:
-                # У кнопок своя обработка
-                widget.configure(bg=colors["card"], fg=colors["accent"])
-            elif isinstance(widget, ModernButton):
-                # Обычные кнопки (check, update) тоже обновляем
-                widget.configure(bg=colors["bg"] if widget["state"] == "disabled" else colors["accent"],
-                                 fg=colors["fg"] if widget["state"] == "disabled" else "white")
-            elif isinstance(widget, tk.Label):
-                widget.configure(bg=colors["bg"] if widget.master == self.main_frame else colors["card"],
-                                 fg=colors["fg"])
-            elif isinstance(widget, tk.Frame):
-                widget.configure(bg=colors["bg"] if widget.master == self.main_frame else colors["card"])
-            elif isinstance(widget, tk.Entry):
-                widget.configure(bg=colors["entry"], fg=colors["fg"],
-                                 readonlybackground=colors["entry"])
-            elif isinstance(widget, scrolledtext.ScrolledText):
-                widget.configure(bg=colors["log"], fg=colors["fg"])
-            elif isinstance(widget, ttk.Progressbar):
-                pass  # не меняем
-            else:
-                try:
-                    widget.configure(bg=colors["bg"], fg=colors["fg"])
-                except:
-                    pass
-
-            for child in widget.winfo_children():
-                update_widgets(child)
-
-        update_widgets(self.root)
-        # Особо обновляем кнопки темы и обзора (они уже обновлены через условие)
-        self.theme_btn.configure(text="🌙 Тёмная" if self.current_theme == "dark" else "☀️ Светлая",
-                                 bg=colors["card"], fg=colors["accent"])
-        self.browse_btn.configure(bg=colors["accent"], fg="white")
-        self.check_btn.configure(bg=colors["accent"], fg="white")
-        if self.update_btn["state"] == "disabled":
-            self.update_btn.configure(bg=colors["card"], fg=colors["fg"])
-        else:
-            self.update_btn.configure(bg=colors["success"], fg="white")
-        self.status_label.configure(fg=colors["success"] if self.status_label["text"].startswith("● Готов") else colors["fg"])
-        # Обновляем заголовок
-        self.title_label.configure(fg=colors["accent"])
-        # Версионная метка
-        self.version_label.configure(fg=colors["fg"], bg=colors["card"])
-
-    def toggle_theme(self):
-        """Переключает тему и сохраняет выбор."""
-        self.current_theme = "light" if self.current_theme == "dark" else "dark"
-        self.colors = self.themes[self.current_theme].copy()
-        self.settings["theme"] = self.current_theme
-        save_settings(self.settings)
-        self.apply_theme()
 
     def browse_folder(self):
         folder = filedialog.askdirectory(title="Выберите папку с Zapret")
@@ -493,3 +559,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+

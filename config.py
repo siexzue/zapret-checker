@@ -3,7 +3,7 @@ import json
 import os
 
 # Версия приложения
-APP_VERSION = "1.0.3"
+APP_VERSION = "1.0.4"
 
 # Репозиторий Zapret
 ZAPRET_REPO = "Flowseal/zapret-discord-youtube"
